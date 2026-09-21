@@ -9,6 +9,9 @@ import {
   UseInterceptors,
   UploadedFile,
   NotFoundException,
+  UseGuards,
+  Req,
+  ForbiddenException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
@@ -17,6 +20,7 @@ import { diskStorage } from 'multer';
 import { extname } from 'path';
 import { Album, AlbumDocument } from './schemas/album.schema.js';
 import { CreateAlbumDto } from './dto/create.album.dto.js';
+import { TokenAuthGuard } from '../users/guards/token-auth.guard.js';
 
 @Controller('albums')
 export class AlbumsController {
@@ -27,7 +31,7 @@ export class AlbumsController {
   @Get()
   async getAll(@Query('artist') artistId: string) {
     const filter = artistId ? { artist: artistId } : {};
-    return this.albumModel.find(filter).populate('artist'); 
+    return this.albumModel.find(filter).populate('artist');
   }
 
   @Get(':id')
@@ -37,6 +41,7 @@ export class AlbumsController {
     return album;
   }
 
+  @UseGuards(TokenAuthGuard)
   @Post()
   @UseInterceptors(
     FileInterceptor('image', {
@@ -61,8 +66,13 @@ export class AlbumsController {
     return album.save();
   }
 
+  @UseGuards(TokenAuthGuard)
   @Delete(':id')
-  async remove(@Param('id') id: string) {
+  async remove(@Param('id') id: string, @Req() req: any) {
+    if (req.user.role !== 'admin') {
+      throw new ForbiddenException('Access denied. Only admin can delete.');
+    }
+
     const result = await this.albumModel.findByIdAndDelete(id);
     if (!result) throw new NotFoundException('Album not found');
     return { message: 'Album deleted successfully', id };

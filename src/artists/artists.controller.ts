@@ -8,6 +8,9 @@ import {
   UseInterceptors,
   UploadedFile,
   NotFoundException,
+  UseGuards,
+  Req,
+  ForbiddenException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
@@ -16,6 +19,7 @@ import { diskStorage } from 'multer';
 import { extname } from 'path';
 import { Artist, ArtistDocument } from './schemas/artist.schema.js';
 import { CreateArtistDto } from './dto/create.artist.dto.js';
+import { TokenAuthGuard } from '../users/guards/token-auth.guard.js';
 
 @Controller('artists')
 export class ArtistsController {
@@ -35,6 +39,7 @@ export class ArtistsController {
     return artist;
   }
 
+  @UseGuards(TokenAuthGuard)
   @Post()
   @UseInterceptors(
     FileInterceptor('image', {
@@ -59,8 +64,13 @@ export class ArtistsController {
     return artist.save();
   }
 
+  @UseGuards(TokenAuthGuard)
   @Delete(':id')
-  async remove(@Param('id') id: string) {
+  async remove(@Param('id') id: string, @Req() req: any) {
+    if (req.user.role !== 'admin') {
+      throw new ForbiddenException('Access denied. Only admin can delete.');
+    }
+
     const result = await this.artistModel.findByIdAndDelete(id);
     if (!result) throw new NotFoundException('Artist not found');
     return { message: 'Artist deleted successfully', id };
